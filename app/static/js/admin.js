@@ -521,6 +521,10 @@
     initIconPlaceholders();
     bindEvents();
     loadUploadHistory();
+    const banner = document.getElementById('vercelBannerNotice');
+    if (banner && typeof window.__IS_VERCEL__ !== 'undefined' && !!window.__IS_VERCEL__) {
+      banner.style.display = 'block';
+    }
   }
 
   if (document.readyState === 'loading') {

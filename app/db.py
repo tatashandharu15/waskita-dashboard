@@ -15,6 +15,7 @@ from . import config
 ASSETS_DIR = config.ASSETS_DIR
 BASE_DIR = config.BASE_DIR
 VIRTUAL_BUNDLED_RECORD_ID = 9999
+VIRTUAL_TEMP_UPLOAD_ID_START = 8888
 
 
 @dataclass
@@ -32,6 +33,7 @@ class UploadRecord:
     summary_json: str = "{}"
     _summary_cache: Optional[Dict[str, Any]] = field(default=None, repr=False)
     bundled_virtual: bool = False
+    temp_virtual: bool = False
 
     @property
     def summary(self) -> Dict[str, Any]:
@@ -44,6 +46,9 @@ class UploadRecord:
 
 
 class UploadRepository:
+    _shared_temp_uploads: Dict[int, UploadRecord] = {}
+    _shared_active_temp_id: Optional[int] = None
+
     def __init__(self, db_path: Optional[Path] = None):
         self.db_path = db_path or config.DB_PATH
         try:
@@ -52,6 +57,8 @@ class UploadRepository:
         except Exception:
             self._db_init_ok = False
         self._bundled_record_cache: Optional[UploadRecord] = None
+        self._temp_uploads = UploadRepository._shared_temp_uploads
+        self._active_temp_id_ref = UploadRepository._shared_active_temp_id
 
     def _conn(self) -> sqlite3.Connection:
         db_str = str(self.db_path)
@@ -77,8 +84,23 @@ class UploadRepository:
             except Exception:
                 raise
 
+    @staticmethod
+    def _is_readonly_error(e: Exception) -> bool:
+        msg = str(e).lower()
+        return (
+            "readonly" in msg
+            or "read-only" in msg
+            or "read only" in msg
+            or "attempt to write a readonly database" in msg
+            or "unable to open database file" in msg
+            or "permission denied" in msg
+        )
+
     def init_db(self) -> None:
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
         try:
             with self._conn() as conn:
                 conn.execute(
@@ -120,6 +142,63 @@ class UploadRepository:
     def _clear_all_active(self, conn: sqlite3.Connection) -> None:
         conn.execute("UPDATE uploads SET is_active = 0 WHERE is_active = 1")
 
+    def _make_temp_upload_record(
+        self,
+        filename_original: str,
+        stored_xlsx_name: str,
+        stored_json_name: str,
+        file_hash: str,
+        parsed_dict: Dict[str, Any],
+        rows_count: int,
+        min_date: Optional[str],
+        max_date: Optional[str],
+    ) -> UploadRecord:
+        existing_by_hash = {r.file_hash: r for r in self._temp_uploads.values()}
+        if file_hash in existing_by_hash:
+            rec = existing_by_hash[file_hash]
+            self._active_temp_id_ref = rec.id
+            for r in self._temp_uploads.values():
+                r.is_active = 1 if r.id == rec.id else 0
+            return rec
+        next_id = VIRTUAL_TEMP_UPLOAD_ID_START
+        used_ids = set(self._temp_uploads.keys())
+        while next_id in used_ids:
+            next_id += 1
+        meta = parsed_dict.get("overview_kpi", {}) or {}
+        summary = {
+            "total_mentions": rows_count,
+            "pct_positive": meta.get("pct_positive", 0),
+            "pct_negative": meta.get("pct_negative", 0),
+            "pct_neutral": meta.get("pct_neutral", 0),
+            "sentiment_composite": meta.get("sentiment_composite", 0),
+            "total_reach": meta.get("total_reach_sum", 0),
+            "top_source": (
+                parsed_dict.get("source_distribution", [{}])[0].get("name", None)
+                if parsed_dict.get("source_distribution")
+                else None
+            ),
+        }
+        uploaded_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        rec = UploadRecord(
+            id=next_id,
+            filename_original=filename_original,
+            filename_stored=stored_xlsx_name,
+            file_hash=file_hash,
+            rows_count=rows_count,
+            min_date=min_date,
+            max_date=max_date,
+            uploaded_at=uploaded_at,
+            is_active=1,
+            parsed_json_path=stored_json_name,
+            summary_json=json.dumps(summary, ensure_ascii=False),
+            temp_virtual=True,
+        )
+        for r in self._temp_uploads.values():
+            r.is_active = 0
+        self._temp_uploads[rec.id] = rec
+        self._active_temp_id_ref = rec.id
+        return rec
+
     def create_upload(
         self,
         filename_original: str,
@@ -131,18 +210,22 @@ class UploadRepository:
     ) -> UploadRecord:
         file_hash = self._hash_file(temp_file_path)
 
-        with self._conn() as conn:
-            existing = conn.execute(
-                "SELECT * FROM uploads WHERE file_hash = ?", (file_hash,)
-            ).fetchone()
-            if existing:
-                rec = self._row_to_record(existing)
-                self._clear_all_active(conn)
-                conn.execute(
-                    "UPDATE uploads SET is_active = 1 WHERE id = ?", (rec.id,)
-                )
-                conn.commit()
-                return rec
+        try:
+            with self._conn() as conn:
+                existing = conn.execute(
+                    "SELECT * FROM uploads WHERE file_hash = ?", (file_hash,)
+                ).fetchone()
+                if existing:
+                    rec = self._row_to_record(existing)
+                    self._clear_all_active(conn)
+                    conn.execute(
+                        "UPDATE uploads SET is_active = 1 WHERE id = ?", (rec.id,)
+                    )
+                    conn.commit()
+                    return rec
+        except Exception as e:
+            if not self._is_readonly_error(e):
+                raise
 
         stored_uuid = str(uuid.uuid4())
         stored_xlsx = f"{stored_uuid}.xlsx"
@@ -150,13 +233,27 @@ class UploadRepository:
         stored_path = config.UPLOAD_DIR / stored_xlsx
         json_path = config.PARSED_DIR / stored_json
 
-        shutil.copyfile(str(temp_file_path), str(stored_path))
-        json_path.write_text(
-            json.dumps(parsed_dict, ensure_ascii=False, indent=2, default=str),
-            encoding="utf-8",
-        )
+        try:
+            config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            config.PARSED_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        try:
+            shutil.copyfile(str(temp_file_path), str(stored_path))
+        except Exception:
+            try:
+                stored_path.write_bytes(temp_file_path.read_bytes())
+            except Exception:
+                pass
+        try:
+            json_path.write_text(
+                json.dumps(parsed_dict, ensure_ascii=False, indent=2, default=str),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
 
-        meta = parsed_dict.get("overview_kpi", {})
+        meta = parsed_dict.get("overview_kpi", {}) or {}
         summary = {
             "total_mentions": rows_count,
             "pct_positive": meta.get("pct_positive", 0),
@@ -172,33 +269,47 @@ class UploadRepository:
         }
         uploaded_at = datetime.utcnow().isoformat(timespec="seconds") + "Z"
 
-        with self._conn() as conn:
-            self._clear_all_active(conn)
-            cur = conn.execute(
-                """
-                INSERT INTO uploads (
-                    filename_original, filename_stored, file_hash,
-                    rows_count, min_date, max_date, uploaded_at,
-                    is_active, summary_json, parsed_json_path
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                """,
-                (
-                    filename_original,
-                    stored_xlsx,
-                    file_hash,
-                    rows_count,
-                    min_date,
-                    max_date,
-                    uploaded_at,
-                    json.dumps(summary, ensure_ascii=False),
-                    str(stored_json),
-                ),
-            )
-            conn.commit()
-            new_id = cur.lastrowid
+        try:
+            with self._conn() as conn:
+                self._clear_all_active(conn)
+                cur = conn.execute(
+                    """
+                    INSERT INTO uploads (
+                        filename_original, filename_stored, file_hash,
+                        rows_count, min_date, max_date, uploaded_at,
+                        is_active, summary_json, parsed_json_path
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                    """,
+                    (
+                        filename_original,
+                        stored_xlsx,
+                        file_hash,
+                        rows_count,
+                        min_date,
+                        max_date,
+                        uploaded_at,
+                        json.dumps(summary, ensure_ascii=False),
+                        str(stored_json),
+                    ),
+                )
+                conn.commit()
+                new_id = cur.lastrowid
 
-            row = conn.execute("SELECT * FROM uploads WHERE id = ?", (new_id,)).fetchone()
-            return self._row_to_record(row)
+                row = conn.execute("SELECT * FROM uploads WHERE id = ?", (new_id,)).fetchone()
+                return self._row_to_record(row)
+        except Exception as e:
+            if not self._is_readonly_error(e):
+                raise
+            return self._make_temp_upload_record(
+                filename_original=filename_original,
+                stored_xlsx_name=stored_xlsx,
+                stored_json_name=stored_json,
+                file_hash=file_hash,
+                parsed_dict=parsed_dict,
+                rows_count=rows_count,
+                min_date=min_date,
+                max_date=max_date,
+            )
 
     def list_uploads(self, limit: int = 50) -> List[UploadRecord]:
         db_results: List[UploadRecord] = []
@@ -211,6 +322,10 @@ class UploadRepository:
                 db_results = [self._row_to_record(r) for r in rows]
         except Exception:
             db_results = []
+        temp_list = sorted(self._temp_uploads.values(), key=lambda r: r.uploaded_at, reverse=True)
+        if temp_list:
+            db_ids = {r.id for r in db_results}
+            db_results = [r for r in temp_list if r.id not in db_ids] + db_results
         bundled = self._build_bundled_virtual_record()
         if bundled:
             if db_results:
@@ -219,7 +334,7 @@ class UploadRepository:
                     db_results.insert(0, bundled)
             else:
                 db_results = [bundled]
-        return db_results
+        return db_results[:limit]
 
     def _build_bundled_virtual_record(self) -> Optional[UploadRecord]:
         if self._bundled_record_cache is not None:
@@ -291,6 +406,8 @@ class UploadRepository:
         return rec
 
     def get_active(self) -> Optional[UploadRecord]:
+        if self._active_temp_id_ref is not None and self._active_temp_id_ref in self._temp_uploads:
+            return self._temp_uploads[self._active_temp_id_ref]
         db_rec: Optional[UploadRecord] = None
         if self._db_init_ok:
             try:
@@ -310,6 +427,8 @@ class UploadRepository:
         return None
 
     def get_by_id(self, upload_id: int) -> Optional[UploadRecord]:
+        if upload_id in self._temp_uploads:
+            return self._temp_uploads[upload_id]
         if upload_id == VIRTUAL_BUNDLED_RECORD_ID:
             bundled = self._build_bundled_virtual_record()
             if bundled and bundled.id == upload_id:
@@ -328,8 +447,20 @@ class UploadRepository:
             return bundled
         return None
 
+    def _clear_all_active_in_memory(self) -> None:
+        for r in self._temp_uploads.values():
+            r.is_active = 0
+        if self._active_temp_id_ref in self._temp_uploads:
+            self._active_temp_id_ref = None
+
     def set_active(self, upload_id: int) -> bool:
         if upload_id == VIRTUAL_BUNDLED_RECORD_ID:
+            self._clear_all_active_in_memory()
+            return True
+        if upload_id in self._temp_uploads:
+            for r in self._temp_uploads.values():
+                r.is_active = 1 if r.id == upload_id else 0
+            self._active_temp_id_ref = upload_id
             return True
         try:
             with self._conn() as conn:
@@ -343,12 +474,29 @@ class UploadRepository:
                     "UPDATE uploads SET is_active = 1 WHERE id = ?", (upload_id,)
                 )
                 conn.commit()
+                self._active_temp_id_ref = None
                 return True
-        except Exception:
+        except Exception as e:
+            if not self._is_readonly_error(e):
+                raise
             return False
 
     def delete_upload(self, upload_id: int) -> bool:
         if upload_id == VIRTUAL_BUNDLED_RECORD_ID:
+            return True
+        if upload_id in self._temp_uploads:
+            rec = self._temp_uploads.pop(upload_id)
+            try:
+                xlsx_path = config.UPLOAD_DIR / rec.filename_stored
+                json_path = config.PARSED_DIR / rec.parsed_json_path
+                if xlsx_path.exists():
+                    xlsx_path.unlink()
+                if json_path.exists():
+                    json_path.unlink()
+            except Exception:
+                pass
+            if self._active_temp_id_ref == upload_id:
+                self._active_temp_id_ref = None
             return True
         rec = self.get_by_id(upload_id)
         if not rec:
@@ -366,9 +514,11 @@ class UploadRepository:
             with self._conn() as conn:
                 conn.execute("DELETE FROM uploads WHERE id = ?", (upload_id,))
                 conn.commit()
-        except Exception:
+                return True
+        except Exception as e:
+            if not self._is_readonly_error(e):
+                raise
             return False
-        return True
 
     def reparse_upload(
         self, upload_id: int, parser_func: Callable[[Path], Dict[str, Any]]
@@ -491,16 +641,27 @@ def record_to_dict(rec: UploadRecord) -> Dict[str, Any]:
     d = asdict(rec)
     d.pop("_summary_cache", None)
     d.pop("bundled_virtual", None)
+    d.pop("temp_virtual", None)
     d["summary"] = rec.summary
     d["filename"] = d.get("filename_original")
     d["created_at"] = d.get("uploaded_at")
     d["date_range_min"] = d.get("min_date")
     d["date_range_max"] = d.get("max_date")
-    d["status"] = "Ready"
+    if getattr(rec, "temp_virtual", False):
+        d["status"] = "Demo (Temp /tmp)"
+        d["persistent"] = False
+    elif getattr(rec, "bundled_virtual", False):
+        d["status"] = "Bundled Sample"
+        d["persistent"] = True
+    else:
+        d["status"] = "Ready"
+        d["persistent"] = True
     try:
         p = config.UPLOAD_DIR / rec.filename_stored
         if not p.exists():
             p = ASSETS_DIR / rec.filename_stored
+        if not p.exists() and getattr(rec, "temp_virtual", False):
+            p = config.PARSED_DIR / rec.parsed_json_path
         d["file_size"] = int(p.stat().st_size) if p.exists() else 0
     except Exception:
         d["file_size"] = 0

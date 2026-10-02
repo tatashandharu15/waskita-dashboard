@@ -307,6 +307,7 @@ async def admin_home(request: Request, secret: str):
             "ADMIN_SECRET": secret,
             "ADMIN_PATH": f"/admin/{secret}",
             "DASHBOARD_PATH": "/",
+            "IS_VERCEL": config.IS_VERCEL,
         },
     )
     return HTMLResponse(html)

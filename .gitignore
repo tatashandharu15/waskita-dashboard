@@ -66,3 +66,5 @@ graphify-out/
 
 # Trae specs (keep if you want to commit, else ignore)
 # .trae/
+.vercel
+.env*
