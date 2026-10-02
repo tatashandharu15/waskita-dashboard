@@ -541,9 +541,19 @@
     initIconPlaceholders();
     bindEvents();
     loadUploadHistory();
-    const banner = document.getElementById('vercelBannerNotice');
-    if (banner && typeof window.__IS_VERCEL__ !== 'undefined' && !!window.__IS_VERCEL__) {
-      banner.style.display = 'block';
+    const isPermanent = typeof window.__IS_PERMANENT_MODE__ !== 'undefined' && !!window.__IS_PERMANENT_MODE__;
+    const bannerTemp = document.getElementById('vercelBannerNotice');
+    const bannerPerm = document.getElementById('permanentBannerNotice');
+    if (isPermanent) {
+      if (bannerTemp) bannerTemp.style.display = 'none';
+      if (bannerPerm) bannerPerm.style.display = 'block';
+    } else {
+      if (bannerPerm) bannerPerm.style.display = 'none';
+      if (bannerTemp && typeof window.__IS_VERCEL__ !== 'undefined' && !!window.__IS_VERCEL__) {
+        bannerTemp.style.display = 'block';
+      } else if (bannerTemp) {
+        bannerTemp.style.display = 'none';
+      }
     }
   }
 
