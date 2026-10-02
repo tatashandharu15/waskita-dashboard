@@ -11,6 +11,12 @@ from app.db import UploadRepository, record_to_dict
 
 
 BASE_DIR = Path(__file__).resolve().parent
+if not (BASE_DIR / "app" / "static").is_dir() or not (BASE_DIR / "app" / "templates").is_dir():
+    _cwd = Path.cwd()
+    if (_cwd / "app" / "static").is_dir() and (_cwd / "app" / "templates").is_dir():
+        BASE_DIR = _cwd
+    elif (_cwd.parent / "app" / "static").is_dir() and (_cwd.parent / "app" / "templates").is_dir():
+        BASE_DIR = _cwd.parent
 STATIC_DIR = BASE_DIR / "app" / "static"
 TEMPLATES_DIR = BASE_DIR / "app" / "templates"
 

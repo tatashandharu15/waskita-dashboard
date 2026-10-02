@@ -4,6 +4,12 @@ from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+if not (BASE_DIR / "main.py").exists() or not (BASE_DIR / "app").is_dir():
+    _cwd = Path.cwd()
+    if (_cwd / "main.py").exists() and (_cwd / "app").is_dir():
+        BASE_DIR = _cwd
+    elif (_cwd.parent / "main.py").exists() and (_cwd.parent / "app").is_dir():
+        BASE_DIR = _cwd.parent
 
 IS_VERCEL = bool(os.getenv("VERCEL")) or bool(os.getenv("VERCEL_ENV")) or bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME"))
 

@@ -4,19 +4,22 @@
   "installCommand": "python3 -m pip install --break-system-packages -r requirements.txt",
   "buildCommand": "bash -c \"mkdir -p assets && true\"",
   "outputDirectory": ".",
-  "cleanUrls": true,
-  "trailingSlash": false,
   "functions": {
-    "api/*.py": {
+    "api/index.py": {
       "maxDuration": 60,
-      "includeFiles": "assets/**"
+      "memory": 2048,
+      "includeFiles": "assets/**,app/**,main.py,requirements.txt,vercel.json"
     }
   },
   "regions": ["sin1"],
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!assets/|static/|favicon\\.ico).*)",
       "destination": "/api/index"
+    },
+    {
+      "source": "/(assets|static)/(.*)",
+      "destination": "/$1/$2"
     }
   ]
 }
