@@ -8,13 +8,7 @@
     "api/index.py": {
       "maxDuration": 60,
       "memory": 2048,
-      "includeFiles": [
-        "assets/**",
-        "app/**",
-        "main.py",
-        "requirements.txt",
-        "vercel.json"
-      ]
+      "includeFiles": "{assets/**,app/**,main.py,requirements.txt,vercel.json}"
     }
   },
   "regions": ["sin1"],
