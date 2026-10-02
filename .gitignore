@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Mac
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+!assets/*.db
+!assets/*.sqlite
+!assets/*.sqlite3
+
+# Uploads & parsed data (keep structure with .gitkeep)
+uploads/*
+!uploads/.gitkeep
+data_parsed/*
+!data_parsed/.gitkeep
+
+# Bundled Vercel persistent assets - keep data files, ignore temp
+assets/*.tmp
+assets/*.temp
+
+# Graphify output
+graphify-out/
+
+# Trae specs (keep if you want to commit, else ignore)
+# .trae/

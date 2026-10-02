@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Panel - Waskita Analytics</title>
+  <link rel="stylesheet" href="/static/css/admin.css" />
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231d4ed8' stroke-width='2.5'><path d='M3 3v18h18'/><path d='M7 15l4-4 4 4 5-6'/></svg>" />
+</head>
+<body>
+  <div id="toast-container"></div>
+
+  <div class="container">
+    <header class="header">
+      <div>
+        <h1 class="header-title">Waskita Analytics - Admin Panel</h1>
+        <p class="header-subtitle">Upload &amp; Manage Reports</p>
+      </div>
+      <div class="header-right">
+        <span class="badge badge-secondary">Admin Path: {{ ADMIN_PATH }}</span>
+        <a href="/" class="btn btn-secondary btn-sm">
+          <span class="icon-inline" id="icon-dashboard-link"></span>
+          Open Dashboard &rarr;
+        </a>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="card-header">
+        <h2 class="card-title">
+          <span class="icon-inline" id="icon-file-spreadsheet"></span>
+          Upload Mentions Report (.xlsx)
+        </h2>
+      </div>
+
+      <div class="card-body">
+        <div id="drop-area" class="drop-area">
+          <div class="drop-area-content">
+            <span class="icon-upload" id="icon-upload"></span>
+            <p class="drop-text">Drop .xlsx file here or click to browse</p>
+            <p class="drop-subtext">Support format .xlsx, .xls</p>
+          </div>
+          <input type="file" id="fileInput" accept=".xlsx,.xls" hidden />
+        </div>
+
+        <div id="filePreview" class="file-preview" style="display:none;">
+          <div class="file-preview-row">
+            <div class="file-info">
+              <span class="icon-inline" id="icon-file-preview"></span>
+              <div>
+                <div class="file-name" id="fileName">-</div>
+                <div class="file-meta">
+                  <span id="fileSize">-</span>
+                  <span class="file-sep">&middot;</span>
+                  <span id="fileRows">0 rows</span>
+                </div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="btnRemoveFile">
+              <span class="icon-inline" id="icon-x-circle"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="progress-wrapper" id="progressWrapper" style="display:none;">
+          <div class="progress-track">
+            <div class="progress-bar" id="progressBar" style="width:0%"></div>
+          </div>
+          <div class="progress-label" id="progressLabel">0%</div>
+        </div>
+
+        <div class="upload-actions">
+          <button type="button" class="btn btn-primary" id="btnUpload" disabled>
+            <span class="icon-inline" id="icon-btn-upload"></span>
+            Upload Report
+          </button>
+        </div>
+
+        <p class="note">
+          <span class="icon-inline" id="icon-alert-circle"></span>
+          Max 200 MB. Kolom wajib: SOURCE, DATE, SENTIMENT, TRACKED KEYWORD, PERFORMANCE
+        </p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header card-header-between">
+        <h2 class="card-title">
+          <span class="icon-inline" id="icon-history"></span>
+          Upload History
+        </h2>
+        <button type="button" class="btn btn-secondary btn-sm" id="btnRefreshList">
+          <span class="icon-inline" id="icon-refresh-cw"></span>
+          Refresh
+        </button>
+      </div>
+
+      <div class="card-body">
+        <div class="table-wrapper">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>File</th>
+                <th>Tanggal Upload</th>
+                <th>Rows</th>
+                <th>Range</th>
+                <th>Status</th>
+                <th class="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="uploadTableBody">
+              <tr class="table-empty">
+                <td colspan="7">
+                  <div class="empty-state">
+                    <span class="icon-empty" id="icon-empty-state"></span>
+                    <p>Belum ada data upload.</p>
+                    <p class="empty-subtext">Klik Refresh atau upload file pertama.</p>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    window.__ADMIN_PATH__ = '{{ ADMIN_SECRET }}';
+  </script>
+  <script src="/static/js/admin.js" defer></script>
+</body>
+</html>

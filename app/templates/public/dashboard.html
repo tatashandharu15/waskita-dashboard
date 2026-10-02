@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Waskita Analytics Dashboard</title>
+<link rel="stylesheet" href="/static/css/dashboard.css">
+<link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231d4ed8' stroke-width='2.5'><path d='M3 3v18h18'/><path d='M7 15l4-4 4 4 5-6'/></svg>" />
+</head>
+<body>
+<div class="container">
+
+<header class="header-bar">
+  <div class="header-left">
+    <h1 class="header-title">Waskita Analytics Dashboard</h1>
+    <p class="header-subtitle">Report Aktif</p>
+  </div>
+  <div class="header-right">
+    <button type="button" id="themeToggle" class="theme-toggle" aria-label="Ganti tema">
+      <svg class="icon-inline sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      <svg class="icon-inline moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+    </button>
+    <div class="date-range" id="dateRange">Memuat...</div>
+    <div class="filter-wrapper">
+      <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+      <select id="filterSource" class="filter-select">
+        <option value="all">Semua Sumber</option>
+      </select>
+      <svg class="icon-inline chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      <span class="filter-notice">Filter KPI & sumber saja</span>
+    </div>
+  </div>
+</header>
+
+<main id="dashboardMain">
+
+<div id="emptyState" class="empty-state hidden">
+  <div class="empty-card">
+    <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+    <h2>No Active Report</h2>
+    <p>Belum ada report analitik yang aktif saat ini.</p>
+  </div>
+</div>
+
+<div id="dashboardContent">
+
+<div class="tabs-wrapper section-wrapper">
+  <div class="tabs-bar" id="tabsBar">
+    <button class="tab-button active" data-tab="overview">
+      <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+      <span>Overview</span>
+    </button>
+    <button class="tab-button" data-tab="mentions">
+      <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+      <span>Semua Mentions</span>
+      <span class="tab-badge" id="tabMentionsCount">-</span>
+    </button>
+    <button class="tab-button" data-tab="samples">
+      <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+      <span>Sampel & Klarifikasi</span>
+    </button>
+  </div>
+
+  <div class="tab-panel active" data-panel="overview">
+
+<section class="section-wrapper">
+  <div class="grid-12" id="kpi-row">
+    <div class="col-3 skeleton-box">
+      <div class="skeleton kpi-skeleton"></div>
+    </div>
+    <div class="col-3 skeleton-box">
+      <div class="skeleton kpi-skeleton"></div>
+    </div>
+    <div class="col-3 skeleton-box">
+      <div class="skeleton kpi-skeleton"></div>
+    </div>
+    <div class="col-3 skeleton-box">
+      <div class="skeleton kpi-skeleton"></div>
+    </div>
+  </div>
+</section>
+
+<section class="section-wrapper">
+  <div class="grid-12">
+    <div class="col-6">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>
+            <span>Distribusi Sumber</span>
+          </div>
+        </div>
+        <div id="chart-source" class="chart-container">
+          <div class="skeleton chart-skeleton"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+            <span>Sentimen</span>
+          </div>
+        </div>
+        <div id="chart-sentiment" class="chart-container">
+          <div class="skeleton chart-skeleton"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-wrapper">
+  <div class="grid-12">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span>Aktivitas Per Jam</span>
+          </div>
+        </div>
+        <div id="chart-hourly" class="chart-container">
+          <div class="skeleton chart-skeleton"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-wrapper">
+  <div class="grid-12">
+    <div class="col-6">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+            <span>Emosi Teratas</span>
+          </div>
+        </div>
+        <div id="chart-emotion" class="chart-container">
+          <div class="skeleton chart-skeleton"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            <span>Distribusi Performa</span>
+          </div>
+        </div>
+        <div id="chart-performance" class="chart-container">
+          <div class="skeleton chart-skeleton"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-wrapper">
+  <div class="grid-12">
+    <div class="col-6">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+            <span>Word Cloud (Kata Teratas)</span>
+          </div>
+          <span class="badge badge-secondary" id="wordCloudBadge">- kata</span>
+        </div>
+        <div id="chart-wordcloud" class="wordcloud-container">
+          <div class="skeleton word-skeleton"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+            <span>Emoji Cloud (Emoji Teratas)</span>
+          </div>
+          <span class="badge badge-secondary" id="emojiCloudBadge">- emoji</span>
+        </div>
+        <div id="chart-emojicloud" class="emojicloud-container">
+          <div class="skeleton emoji-skeleton"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-wrapper">
+  <div class="grid-12">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <span>Sentimen per Keyword (Top 3)</span>
+          </div>
+        </div>
+        <div id="chart-keyword" class="chart-container">
+          <div class="skeleton chart-skeleton"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-wrapper">
+  <div class="grid-12">
+    <div class="col-8">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>
+            <span>Top Hashtags</span>
+          </div>
+        </div>
+        <div id="table-hashtags" class="table-container">
+          <div class="skeleton table-skeleton"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span>Ringkasan Engagement</span>
+          </div>
+        </div>
+        <div id="box-engagement" class="engagement-container">
+          <div class="skeleton engagement-skeleton"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-wrapper">
+  <div class="grid-12">
+    <div class="col-8">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <span>Top Authors</span>
+          </div>
+        </div>
+        <div id="list-authors" class="list-container">
+          <div class="skeleton list-skeleton"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+            <span>Demografi Gender</span>
+          </div>
+        </div>
+        <div id="demo-gauge" class="gauge-container">
+          <div class="skeleton gauge-skeleton"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-wrapper">
+  <div class="grid-12">
+    <div class="col-6">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14"></path><path d="M5 12h14"></path><path d="M5 16h14"></path></svg>
+            <span>Bahasa (Top 5)</span>
+          </div>
+        </div>
+        <div id="chart-language" class="chart-container">
+          <div class="skeleton chart-skeleton"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+            <span>Negara (Top 5)</span>
+          </div>
+        </div>
+        <div id="chart-country" class="chart-container">
+          <div class="skeleton chart-skeleton"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-wrapper">
+  <div class="grid-12">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.912 5.813h6.112l-4.943 3.587 1.887 5.813L12 14.626l-4.968 3.587 1.887-5.813L3.976 8.813h6.112z"></path></svg>
+            <span>Insight & Sampel Negatif</span>
+          </div>
+        </div>
+        <div class="grid-12">
+          <div class="col-5">
+            <div id="insight-box" class="insight-box-container">
+              <div class="skeleton insight-skeleton"></div>
+            </div>
+          </div>
+          <div class="col-7">
+            <div class="negative-title-wrap">
+              <div class="negative-title">
+                <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                <span>5 Sampel Konten Negatif</span>
+              </div>
+            </div>
+            <div id="list-negative" class="negative-list">
+              <div class="skeleton negative-skeleton"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+  </div>
+
+  <div class="tab-panel" data-panel="mentions">
+
+<section class="section-wrapper">
+  <div class="grid-12">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <span>Daftar Mentions (500 Data Pertama)</span>
+          </div>
+          <div class="mentions-controls">
+            <div class="mentions-search">
+              <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="mentionsSearch" placeholder="Cari text / author / keyword..." />
+            </div>
+            <select id="mentionsSentimentFilter" class="filter-select">
+              <option value="all">Semua Sentimen</option>
+              <option value="positive">Positif</option>
+              <option value="neutral">Netral</option>
+              <option value="negative">Negatif</option>
+            </select>
+            <span class="badge badge-secondary" id="mentionsBadge">- data</span>
+          </div>
+        </div>
+        <div class="table-container mentions-table-wrapper">
+          <table class="mentions-table" id="mentionsTable">
+            <thead>
+              <tr>
+                <th style="width:48px">#</th>
+                <th style="width:100px">Sumber</th>
+                <th style="width:150px">Tanggal</th>
+                <th style="width:160px">Author</th>
+                <th style="width:160px">Keyword</th>
+                <th>Preview Konten</th>
+                <th style="width:88px">Sentimen</th>
+                <th style="width:92px">Emosi</th>
+                <th style="width:100px">Reach</th>
+                <th style="width:110px">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="mentionsTableBody">
+              <tr><td colspan="10"><div class="skeleton table-skeleton"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="mentions-pagination" id="mentionsPagination">
+          <button class="btn-secondary" id="mentionsPrev" disabled>
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            Sebelumnya
+          </button>
+          <span id="mentionsPageText" class="pagination-text">Halaman 1 dari -</span>
+          <button class="btn-secondary" id="mentionsNext" disabled>
+            Selanjutnya
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+  </div>
+
+  <div class="tab-panel" data-panel="samples">
+
+<section class="section-wrapper">
+  <div class="grid-12">
+    <div class="col-7">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <span>20 Sampel Konten Negatif</span>
+          </div>
+        </div>
+        <div id="list-negative-extra" class="negative-list">
+          <div class="skeleton negative-skeleton"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-5">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+            <span>10 Sampel Konten Positif + Netral</span>
+          </div>
+        </div>
+        <div id="list-mixed-sample" class="negative-list">
+          <div class="skeleton negative-skeleton"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+  </div>
+</div>
+
+</div>
+
+</main>
+</div>
+
+<div id="toastContainer" class="toast-container"></div>
+
+<script src="/static/js/dashboard.js"></script>
+</body>
+</html>
