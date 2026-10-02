@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import config
-from app.db import UploadRepository, record_to_dict
+from app.db import UploadRepository, record_to_dict, get_upload_repository, PostgresUploadsRepository
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -184,17 +184,25 @@ IS_VERCEL_RUNTIME = config.IS_VERCEL
 if not IS_VERCEL_RUNTIME:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        repo = UploadRepository()
-        repo.init_db()
+        repo = get_upload_repository()
+        if hasattr(repo, "init_db"):
+            try:
+                repo.init_db()
+            except Exception:
+                pass
         app.state.repo = repo
         banner_lines = []
         banner_lines.append("")
         banner_lines.append("=" * 70)
         banner_lines.append("Waskita Analytics Dashboard")
         banner_lines.append("=" * 70)
-        banner_lines.append(f"  SQLite DB     : {config.DB_PATH}")
-        banner_lines.append(f"  Uploads dir   : {config.UPLOAD_DIR}")
-        banner_lines.append(f"  Parsed JSON   : {config.PARSED_DIR}")
+        if isinstance(repo, PostgresUploadsRepository):
+            banner_lines.append(f"  Storage Mode  : PERMANENT (Vercel Postgres + Blob)")
+        else:
+            banner_lines.append(f"  Storage Mode  : SQLite (Local/Fallback)")
+            banner_lines.append(f"  SQLite DB     : {config.DB_PATH}")
+            banner_lines.append(f"  Uploads dir   : {config.UPLOAD_DIR}")
+            banner_lines.append(f"  Parsed JSON   : {config.PARSED_DIR}")
         banner_lines.append(f"  Max upload    : {config.MAX_UPLOAD_MB} MB")
         if config.GENERATED_SECRET_ON_STARTUP:
             banner_lines.append(f"  Admin URL     : http://localhost:8000/admin/{config.ADMIN_SECRET}")
@@ -213,10 +221,10 @@ else:
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
-def get_repo(request: Request) -> UploadRepository:
+def get_repo(request: Request):
     if not hasattr(request.app.state, "repo") or request.app.state.repo is None:
         try:
-            request.app.state.repo = UploadRepository()
+            request.app.state.repo = get_upload_repository()
         except Exception:
             request.app.state.repo = UploadRepository.__new__(UploadRepository)
             request.app.state.repo.db_path = config.DB_PATH
@@ -317,6 +325,7 @@ async def admin_login_page(request: Request):
 async def admin_home(request: Request, secret: str):
     validate_secret(secret)
     is_vc = bool(config.IS_VERCEL)
+    is_perm = bool(config.IS_PERMANENT_MODE)
     html = _render_template(
         "admin/upload.html",
         {
@@ -325,6 +334,7 @@ async def admin_home(request: Request, secret: str):
             "DASHBOARD_PATH": "/",
             "IS_VERCEL": config.IS_VERCEL,
             "IS_VERCEL_BOOL": "true" if is_vc else "false",
+            "IS_PERMANENT_BOOL": "true" if is_perm else "false",
         },
     )
     return HTMLResponse(html)

@@ -86,6 +86,23 @@
           </div>
         </div>
 
+        <div class="permanent-banner-notice" id="permanentBannerNotice" style="display:none; margin-top:14px; padding:14px 18px; border-radius:12px; background: color-mix(in srgb, var(--success) 12%, transparent); border:1px solid color-mix(in srgb, var(--success) 40%, transparent); color: var(--fg);">
+          <div style="display:flex; align-items:flex-start; gap:12px;">
+            <span style="flex:0 0 auto; font-size:18px; line-height:1;">✅</span>
+            <div style="flex:1 1 auto; font-size:14px; line-height:1.5;">
+              <div style="font-weight:700; margin-bottom:4px; color: var(--success-contrast);">
+                MODE PERMANENT AKTIF: UPLOAD TERSIMPAN FOREVER (VERCEL POSTGRES + BLOB STORAGE)
+              </div>
+              <div>
+                File Excel yang kamu upload dan hasil parsingnya disimpan PERMANEN di <b>Vercel Postgres (relational metadata)</b> + <b>Vercel Blob Storage (object file)</b>. Data <b>TIDAK AKAN HILANG</b> meskipun cold start, recycle, atau redeploy.
+              </div>
+              <div style="margin-top:6px;">
+                <b>Biaya:</b> <span style="font-weight:700; color: var(--success-contrast);">FREE TIER $0 selamanya</span> (Postgres 256 MB storage + Blob 1 GB storage). Cukup untuk ~100 uploadan Excel 5-10 MB!
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="upload-actions">
           <button type="button" class="btn btn-primary" id="btnUpload" disabled>
             <span class="icon-inline" id="icon-btn-upload"></span>
@@ -146,6 +163,29 @@
   <script>
     window.__ADMIN_PATH__ = '{{ ADMIN_SECRET }}';
     window.__IS_VERCEL__ = {{ IS_VERCEL_BOOL }};
+    window.__IS_PERMANENT_MODE__ = {{ IS_PERMANENT_BOOL }};
+    (function() {
+      function toggleBanners() {
+        const bannerPerm = document.getElementById('permanentBannerNotice');
+        const bannerTemp = document.getElementById('vercelBannerNotice');
+        if (window.__IS_PERMANENT_MODE__ === true) {
+          if (bannerPerm) bannerPerm.style.display = 'block';
+          if (bannerTemp) bannerTemp.style.display = 'none';
+        } else {
+          if (bannerPerm) bannerPerm.style.display = 'none';
+          if (bannerTemp && window.__IS_VERCEL__ === true) {
+            bannerTemp.style.display = 'block';
+          } else if (bannerTemp) {
+            bannerTemp.style.display = 'none';
+          }
+        }
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', toggleBanners);
+      } else {
+        toggleBanners();
+      }
+    })();
   </script>
   <script src="/static/js/admin.js" defer></script>
 </body>

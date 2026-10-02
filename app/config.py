@@ -85,3 +85,8 @@ try:
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 except Exception:
     pass
+
+POSTGRES_URL = os.getenv("POSTGRES_URL") or os.getenv("POSTGRES_PRISMA_URL") or None
+BLOB_READ_WRITE_TOKEN = os.getenv("BLOB_READ_WRITE_TOKEN") or None
+BLOB_API_URL = os.getenv("BLOB_API_URL", "https://blob.vercel-storage.com")
+IS_PERMANENT_MODE = bool(POSTGRES_URL and BLOB_READ_WRITE_TOKEN)

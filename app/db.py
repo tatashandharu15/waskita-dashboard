@@ -5,11 +5,19 @@ import hashlib
 import shutil
 import os
 from pathlib import Path
-from typing import Optional, List, Any, Dict, Callable
+from typing import Optional, List, Any, Dict, Callable, Union, Tuple
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 
 from . import config
+
+try:
+    import psycopg2
+    import psycopg2.extras
+    _HAS_PSYCOPG2 = True
+except Exception:
+    psycopg2 = None
+    _HAS_PSYCOPG2 = False
 
 
 ASSETS_DIR = config.ASSETS_DIR
@@ -637,11 +645,292 @@ class UploadRepository:
         return h.hexdigest()
 
 
+class PostgresStorageError(Exception):
+    pass
+
+
+class PostgresUploadsRepository:
+    POSTGRES_SCHEMA_SQL = """
+        CREATE TABLE IF NOT EXISTS uploads (
+            id SERIAL PRIMARY KEY,
+            filename_original TEXT NOT NULL,
+            filename_stored TEXT NOT NULL,
+            file_hash TEXT NOT NULL UNIQUE,
+            rows_count INTEGER NOT NULL DEFAULT 0,
+            min_date TEXT,
+            max_date TEXT,
+            uploaded_at TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 0,
+            summary_json TEXT NOT NULL DEFAULT '{}',
+            parsed_json_path TEXT NOT NULL,
+            tracked_keywords_json TEXT,
+            blob_xlsx_url TEXT NOT NULL,
+            blob_json_url TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_uploads_active ON uploads(is_active);
+        CREATE INDEX IF NOT EXISTS idx_uploads_uploaded_at ON uploads(uploaded_at DESC);
+    """
+
+    def __init__(self):
+        if not _HAS_PSYCOPG2:
+            raise PostgresStorageError(
+                "psycopg2-binary tidak terinstall. Jalankan pip install psycopg2-binary"
+            )
+        if not config.POSTGRES_URL:
+            raise PostgresStorageError(
+                "POSTGRES_URL environment variable tidak tersedia. "
+                "Enable Vercel Postgres Storage untuk permanent upload mode."
+            )
+        self._url = config.POSTGRES_URL
+        try:
+            self.init_db()
+            self._db_init_ok = True
+        except Exception as e:
+            self._db_init_ok = False
+            raise PostgresStorageError(f"Init Postgres gagal: {e}") from None
+        try:
+            from .blob_storage import BlobStorageClient
+            self._blob = BlobStorageClient()
+        except Exception as e:
+            raise PostgresStorageError(f"Init BlobStorage gagal: {e}") from None
+
+    def _connect(self):
+        try:
+            c = psycopg2.connect(self._url, connect_timeout=15)
+            c.autocommit = False
+            return c
+        except Exception as e:
+            raise PostgresStorageError(
+                f"Tidak bisa konek ke Postgres (timeout/kredensial salah). Cek POSTGRES_URL env: {type(e).__name__}"
+            ) from None
+
+    def init_db(self) -> None:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(self.POSTGRES_SCHEMA_SQL)
+                conn.commit()
+        except PostgresStorageError:
+            raise
+        except Exception as e:
+            raise PostgresStorageError(f"Init Postgres table gagal: {e}") from None
+
+    def _row_to_record(self, row: Tuple) -> UploadRecord:
+        cols = [
+            "id","filename_original","filename_stored","file_hash","rows_count","min_date","max_date",
+            "uploaded_at","is_active","summary_json","parsed_json_path","tracked_keywords_json",
+            "blob_xlsx_url","blob_json_url"
+        ]
+        d = dict(zip(cols, row))
+        blob_xlsx = d.pop("blob_xlsx_url", None)
+        blob_json = d.pop("blob_json_url", None)
+        d.pop("tracked_keywords_json", None)
+        rec = UploadRecord(**{
+            k: (d[k] if d[k] is not None else "")
+            for k in ["id","filename_original","filename_stored","file_hash","rows_count","min_date","max_date","uploaded_at","is_active","summary_json","parsed_json_path"]
+        })
+        rec.blob_xlsx_url = blob_xlsx
+        rec.blob_json_url = blob_json
+        return rec
+
+    def create_upload(
+        self,
+        filename_original: str,
+        filename_stored: str,
+        parsed_json_path: str,
+        file_hash: str,
+        rows_count: int,
+        min_date: Optional[str],
+        max_date: Optional[str],
+        uploaded_at: str,
+        blob_xlsx_url: str,
+        blob_json_url: str,
+        summary_dict: Optional[Dict[str, Any]] = None,
+        tracked_keywords_json: Optional[str] = None,
+        auto_set_active: bool = True,
+    ) -> UploadRecord:
+        summary_json = json.dumps(summary_dict or {}, ensure_ascii=False)
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    if auto_set_active:
+                        cur.execute("UPDATE uploads SET is_active = 0 WHERE is_active = 1")
+                    cur.execute(
+                        """
+                        INSERT INTO uploads
+                          (filename_original, filename_stored, file_hash, rows_count, min_date, max_date, uploaded_at, is_active, summary_json, parsed_json_path, tracked_keywords_json, blob_xlsx_url, blob_json_url)
+                        VALUES
+                          (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id, filename_original, filename_stored, file_hash, rows_count, min_date, max_date, uploaded_at, is_active, summary_json, parsed_json_path, tracked_keywords_json, blob_xlsx_url, blob_json_url
+                        """,
+                        (
+                            filename_original, filename_stored, file_hash, int(rows_count or 0),
+                            min_date, max_date, uploaded_at, 1 if auto_set_active else 0,
+                            summary_json, parsed_json_path, tracked_keywords_json or "[]",
+                            blob_xlsx_url, blob_json_url,
+                        ),
+                    )
+                    row = cur.fetchone()
+                conn.commit()
+            if not row:
+                raise PostgresStorageError("Insert Postgres return kosong")
+            return self._row_to_record(row)
+        except PostgresStorageError:
+            raise
+        except Exception as e:
+            if isinstance(e, psycopg2.IntegrityError) and "file_hash" in str(e).lower():
+                try:
+                    return self._get_by_hash(file_hash)
+                except Exception as e2:
+                    raise PostgresStorageError(f"Duplicate file hash tapi gagal load: {e2}") from None
+            raise PostgresStorageError(f"Insert Postgres gagal: {type(e).__name__}: {e}") from None
+
+    def _get_by_hash(self, file_hash: str) -> UploadRecord:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, filename_original, filename_stored, file_hash, rows_count, min_date, max_date, uploaded_at, is_active, summary_json, parsed_json_path, tracked_keywords_json, blob_xlsx_url, blob_json_url FROM uploads WHERE file_hash = %s LIMIT 1",
+                    (file_hash,),
+                )
+                row = cur.fetchone()
+        if not row:
+            raise PostgresStorageError("Not found by hash")
+        return self._row_to_record(row)
+
+    def list_uploads(self, limit: int = 25) -> List[UploadRecord]:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT id, filename_original, filename_stored, file_hash, rows_count, min_date, max_date, uploaded_at, is_active, summary_json, parsed_json_path, tracked_keywords_json, blob_xlsx_url, blob_json_url FROM uploads ORDER BY uploaded_at DESC LIMIT %s",
+                        (int(max(limit, 1)),),
+                    )
+                    rows = cur.fetchall()
+        except PostgresStorageError:
+            raise
+        except Exception as e:
+            raise PostgresStorageError(f"List uploads Postgres gagal: {type(e).__name__}") from None
+        return [self._row_to_record(r) for r in (rows or [])]
+
+    def get_active(self) -> Optional[UploadRecord]:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT id, filename_original, filename_stored, file_hash, rows_count, min_date, max_date, uploaded_at, is_active, summary_json, parsed_json_path, tracked_keywords_json, blob_xlsx_url, blob_json_url FROM uploads WHERE is_active = 1 ORDER BY uploaded_at DESC LIMIT 1"
+                    )
+                    row = cur.fetchone()
+        except PostgresStorageError:
+            raise
+        except Exception as e:
+            raise PostgresStorageError(f"Get active Postgres gagal: {type(e).__name__}") from None
+        if not row:
+            return None
+        return self._row_to_record(row)
+
+    def get_by_id(self, upload_id: int) -> Optional[UploadRecord]:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT id, filename_original, filename_stored, file_hash, rows_count, min_date, max_date, uploaded_at, is_active, summary_json, parsed_json_path, tracked_keywords_json, blob_xlsx_url, blob_json_url FROM uploads WHERE id = %s LIMIT 1",
+                        (int(upload_id),),
+                    )
+                    row = cur.fetchone()
+        except PostgresStorageError:
+            raise
+        except Exception as e:
+            raise PostgresStorageError(f"Get by id Postgres gagal: {type(e).__name__}") from None
+        if not row:
+            return None
+        return self._row_to_record(row)
+
+    def set_active(self, upload_id: int) -> bool:
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE uploads SET is_active = 0 WHERE is_active = 1")
+                    cur.execute("UPDATE uploads SET is_active = 1 WHERE id = %s", (int(upload_id),))
+                    ok = cur.rowcount > 0
+                conn.commit()
+            return bool(ok)
+        except PostgresStorageError:
+            raise
+        except Exception as e:
+            raise PostgresStorageError(f"Set active Postgres gagal: {type(e).__name__}") from None
+
+    def delete_upload(self, upload_id: int) -> bool:
+        rec = self.get_by_id(upload_id)
+        if not rec:
+            return False
+        try:
+            urls = [u for u in (getattr(rec, "blob_xlsx_url", None), getattr(rec, "blob_json_url", None)) if isinstance(u, str) and u.strip()]
+            if urls:
+                try:
+                    self._blob.delete(urls)
+                except Exception:
+                    pass
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM uploads WHERE id = %s", (int(upload_id),))
+                    ok = cur.rowcount > 0
+                conn.commit()
+            return bool(ok)
+        except PostgresStorageError:
+            raise
+        except Exception as e:
+            raise PostgresStorageError(f"Delete Postgres gagal: {type(e).__name__}") from None
+
+    def load_parsed_json(self, upload_id: int) -> Optional[Dict[str, Any]]:
+        rec = self.get_by_id(upload_id)
+        if not rec:
+            return None
+        blob_url = getattr(rec, "blob_json_url", None)
+        if blob_url:
+            try:
+                raw_bytes = self._blob.download_bytes(blob_url)
+                try:
+                    return json.loads(raw_bytes.decode("utf-8"))
+                except Exception:
+                    try:
+                        return json.loads(raw_bytes.decode("utf-8", errors="replace"))
+                    except Exception:
+                        return None
+            except Exception:
+                return None
+        fallback = UploadRepository(db_path=config.DB_PATH)
+        return fallback.load_parsed_json(upload_id)
+
+
+_singleton_repo_ref: Dict[str, Any] = {"sqlite": None, "postgres": None}
+
+
+def get_upload_repository() -> Union[UploadRepository, PostgresUploadsRepository]:
+    if config.IS_PERMANENT_MODE and _HAS_PSYCOPG2:
+        if _singleton_repo_ref["postgres"] is None:
+            try:
+                _singleton_repo_ref["postgres"] = PostgresUploadsRepository()
+            except Exception:
+                _singleton_repo_ref["postgres"] = False
+        inst = _singleton_repo_ref["postgres"]
+        if isinstance(inst, PostgresUploadsRepository):
+            return inst
+    if _singleton_repo_ref["sqlite"] is None:
+        _singleton_repo_ref["sqlite"] = UploadRepository()
+    return _singleton_repo_ref["sqlite"]
+
+
 def record_to_dict(rec: UploadRecord) -> Dict[str, Any]:
     d = asdict(rec)
     d.pop("_summary_cache", None)
     d.pop("bundled_virtual", None)
     d.pop("temp_virtual", None)
+    blob_xlsx = getattr(rec, "blob_xlsx_url", None)
+    blob_json = getattr(rec, "blob_json_url", None)
+    if blob_xlsx:
+        d["blob_xlsx_url"] = blob_xlsx
+    if blob_json:
+        d["blob_json_url"] = blob_json
     d["summary"] = rec.summary
     d["filename"] = d.get("filename_original")
     d["created_at"] = d.get("uploaded_at")
@@ -653,16 +942,38 @@ def record_to_dict(rec: UploadRecord) -> Dict[str, Any]:
     elif getattr(rec, "bundled_virtual", False):
         d["status"] = "Bundled Sample"
         d["persistent"] = True
-    else:
-        d["status"] = "Ready"
+    elif blob_json or blob_xlsx or isinstance(rec.__class__, type) and rec.__class__.__name__ == "PostgresUploadsRecordStub":
+        d["status"] = "Ready (Permanent)"
         d["persistent"] = True
+    elif getattr(rec, "blob_json_url", None) or getattr(rec, "blob_xlsx_url", None):
+        d["status"] = "Ready (Permanent)"
+        d["persistent"] = True
+    else:
+        try:
+            from .blob_storage import BlobStorageError as _BSE
+        except Exception:
+            _BSE = type(None)
+        if isinstance(globals().get("__permanent_marker__", None), type(True)) and rec.id >= 1:
+            d["status"] = "Ready (Permanent)"
+            d["persistent"] = True
+        else:
+            d["status"] = "Ready"
+            d["persistent"] = True
+    for attr in ("blob_xlsx_url", "blob_json_url"):
+        if getattr(rec, attr, None) is not None:
+            d["status"] = "Ready (Permanent)"
+            d["persistent"] = True
+            break
     try:
         p = config.UPLOAD_DIR / rec.filename_stored
         if not p.exists():
             p = ASSETS_DIR / rec.filename_stored
         if not p.exists() and getattr(rec, "temp_virtual", False):
             p = config.PARSED_DIR / rec.parsed_json_path
-        d["file_size"] = int(p.stat().st_size) if p.exists() else 0
+        d["file_size"] = int(p.stat().st_size) if p and p.exists() else 0
+        if d["file_size"] == 0 and getattr(rec, "blob_xlsx_url", None):
+            d["file_size"] = int(d.get("file_size") or 0)
     except Exception:
         d["file_size"] = 0
     return d
+
