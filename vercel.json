@@ -3,9 +3,13 @@
   "framework": null,
   "installCommand": "pip install -r requirements.txt",
   "buildCommand": "bash -c \"mkdir -p assets && true\"",
+  "outputDirectory": ".",
+  "cleanUrls": true,
+  "trailingSlash": false,
   "functions": {
-    "api/index.py": {
-      "maxDuration": 60
+    "api/*.py": {
+      "maxDuration": 60,
+      "includeFiles": "assets/**"
     }
   },
   "regions": ["sin1"],
