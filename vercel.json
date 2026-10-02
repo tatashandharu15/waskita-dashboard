@@ -2,24 +2,20 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "python3 -m pip install --break-system-packages -r requirements.txt",
-  "buildCommand": "bash -c \"mkdir -p assets && true\"",
+  "buildCommand": "bash -c \"mkdir -p assets && cp -Rfn app/static static 2>/dev/null; true\"",
   "outputDirectory": ".",
   "functions": {
     "api/index.py": {
       "maxDuration": 60,
       "memory": 2048,
-      "includeFiles": "{assets/**,app/**,main.py,requirements.txt,vercel.json}"
+      "includeFiles": "{assets/**,app/**,main.py,requirements.txt,vercel.json,static/**}"
     }
   },
   "regions": ["sin1"],
   "rewrites": [
     {
-      "source": "/((?!assets/|static/|favicon\\.ico).*)",
+      "source": "/(.*)",
       "destination": "/api/index"
-    },
-    {
-      "source": "/(assets|static)/(.*)",
-      "destination": "/$1/$2"
     }
   ]
 }
