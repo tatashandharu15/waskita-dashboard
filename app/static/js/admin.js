@@ -515,7 +515,27 @@
   }
 
   function init() {
+    const rawPath = (window.__ADMIN_PATH__ || '').trim();
+    if (!rawPath) {
+      try {
+        const fromStorage = localStorage.getItem('ADMIN_SECRET_LAST');
+        if (fromStorage && fromStorage.trim()) {
+          console.warn('[admin] __ADMIN_PATH__ empty, fallback localStorage ADMIN_SECRET_LAST, redirect ke /admin/' + fromStorage);
+          window.location.assign('/admin/' + encodeURIComponent(fromStorage.trim()));
+          return;
+        }
+      } catch (_e) {}
+      try {
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#7f1d1d;color:#fff;padding:14px 20px;border-radius:12px;font-weight:700;min-width:340px;max-width:92vw;box-shadow:0 20px 40px rgba(0,0,0,.25);border:1px solid #b91c1c;font-size:14px;line-height:1.5;';
+        toast.innerHTML = '<div style="margin-bottom:6px;">⚠️ URL ADMIN TIDAK VALID (secret kosong)</div><div style="font-weight:500;font-size:13px;opacity:.98;">JANGAN buka /admin/ langsung tanpa secret.<br>Solusi mudah: <b style="color:#fde68a;">BUKA /admin</b> (login form baru) atau <b style="color:#fde68a;">/admin/&lt;ADMIN_SECRET&gt;</b> dengan nilai benar.<br>(<a href="/admin" style="color:#93c5fd;font-weight:700;text-decoration:underline;">Klik disini pindah ke halaman login Admin →</a>)</div>';
+        document.body && document.body.appendChild(toast);
+      } catch (_e) {}
+      console.error('[admin] FATAL: window.__ADMIN_PATH__ TIDAK ADA / kosong. URL yang dibuka user BUKAN /admin/<secret>.');
+      return;
+    }
     if (!ADMIN_PATH) {
+      // This block kept for safety; the rawPath check above is primary guard.
       console.warn('[admin] __ADMIN_PATH__ tidak terdeteksi.');
     }
     initIconPlaceholders();

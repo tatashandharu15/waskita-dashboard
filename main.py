@@ -298,6 +298,18 @@ async def public_dashboard(request: Request):
         )
 
 
+@app.get("/admin", response_class=HTMLResponse)
+@app.get("/admin/", response_class=HTMLResponse)
+async def admin_login_page(request: Request):
+    html = _render_template(
+        "admin/login.html",
+        {
+            "IS_VERCEL": config.IS_VERCEL,
+        },
+    )
+    return HTMLResponse(html)
+
+
 @app.get("/admin/{secret}", response_class=HTMLResponse)
 async def admin_home(request: Request, secret: str):
     validate_secret(secret)
