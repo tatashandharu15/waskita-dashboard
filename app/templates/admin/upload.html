@@ -145,7 +145,7 @@
 
   <script>
     window.__ADMIN_PATH__ = '{{ ADMIN_SECRET }}';
-    window.__IS_VERCEL__ = {{ 'true' if IS_VERCEL else 'false' }};
+    window.__IS_VERCEL__ = {{ IS_VERCEL_BOOL }};
   </script>
   <script src="/static/js/admin.js" defer></script>
 </body>

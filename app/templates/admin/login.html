@@ -144,7 +144,7 @@
         <h1 class="title">Waskita Admin Login</h1>
         <p class="subtitle">Dashboard Analytics — Upload Report Excel</p>
       </div>
-      <span class="vercel-tag" id="envTag">Local</span>
+      <span class="vercel-tag" id="envTag">{{ IS_VERCEL_TAG }}</span>
     </div>
 
     <form id="loginForm" autocomplete="off" onsubmit="return false;">
@@ -174,7 +174,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-  window.__IS_VERCEL__ = {{ 'true' if IS_VERCEL else 'false' }};
+  window.__IS_VERCEL__ = {{ IS_VERCEL_BOOL }};
   (function(){
     "use strict";
     try {
@@ -213,48 +213,25 @@
       setTimeout(() => toastEl.classList.remove('show'), 3200);
     }
 
-    async function verifyAndRedirect(secret) {
-      if (!secret) {
+    function submitLogin(secret) {
+      const s = (secret || '').trim();
+      if (!s) {
         showToast('error', 'Secret kosong', 'Isi ADMIN_SECRET terlebih dahulu');
-        return false;
+        return;
       }
       btn.disabled = true;
       const old = btnText.textContent;
-      btnText.textContent = 'Memverifikasi...';
-      try {
-        const res = await fetch(`/admin/${encodeURIComponent(secret)}/api/uploads`, {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' },
-        });
-        if (res.ok) {
-          try { localStorage.setItem(STORAGE_KEY, secret); } catch (_e) {}
-          showToast('success', 'Secret benar!', 'Redirect ke panel admin...');
-          setTimeout(() => { window.location.assign(`/admin/${encodeURIComponent(secret)}`); }, 550);
-          return true;
-        } else if (res.status === 404) {
-          showToast('error', 'Secret salah', 'Cek kembali ADMIN_SECRET di Vercel Settings > Show value');
-          return false;
-        } else {
-          let t = `HTTP ${res.status}`;
-          try {
-            const d = await res.json();
-            if (d && d.detail) t = d.detail;
-          } catch (_e) {}
-          showToast('error', 'Gagal verifikasi', t);
-          return false;
-        }
-      } catch (err) {
-        showToast('error', 'Koneksi gagal', err && err.message ? err.message : 'Periksa jaringan');
-        return false;
-      } finally {
-        btn.disabled = false;
-        btnText.textContent = old;
-      }
+      btnText.textContent = 'Mengarahkan...';
+      try { localStorage.setItem(STORAGE_KEY, s); } catch (_e) {}
+      showToast('info', 'Memproses', 'Redirect ke panel admin...');
+      setTimeout(() => {
+        window.location.assign(`/admin/${encodeURIComponent(s)}`);
+      }, 350);
     }
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      verifyAndRedirect(input.value.trim());
+      submitLogin(input.value);
     });
   })();
 </script>

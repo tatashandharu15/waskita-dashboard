@@ -301,10 +301,13 @@ async def public_dashboard(request: Request):
 @app.get("/admin", response_class=HTMLResponse)
 @app.get("/admin/", response_class=HTMLResponse)
 async def admin_login_page(request: Request):
+    is_vc = bool(config.IS_VERCEL)
     html = _render_template(
         "admin/login.html",
         {
             "IS_VERCEL": config.IS_VERCEL,
+            "IS_VERCEL_BOOL": "true" if is_vc else "false",
+            "IS_VERCEL_TAG": "Production Vercel" if is_vc else "Local",
         },
     )
     return HTMLResponse(html)
@@ -313,6 +316,7 @@ async def admin_login_page(request: Request):
 @app.get("/admin/{secret}", response_class=HTMLResponse)
 async def admin_home(request: Request, secret: str):
     validate_secret(secret)
+    is_vc = bool(config.IS_VERCEL)
     html = _render_template(
         "admin/upload.html",
         {
@@ -320,6 +324,7 @@ async def admin_home(request: Request, secret: str):
             "ADMIN_PATH": f"/admin/{secret}",
             "DASHBOARD_PATH": "/",
             "IS_VERCEL": config.IS_VERCEL,
+            "IS_VERCEL_BOOL": "true" if is_vc else "false",
         },
     )
     return HTMLResponse(html)
