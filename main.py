@@ -256,8 +256,46 @@ async def api_dashboard_active(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 async def public_dashboard(request: Request):
-    html = _render_template("public/dashboard.html")
-    return HTMLResponse(html)
+    try:
+        html = _render_template("public/dashboard.html")
+        return HTMLResponse(html)
+    except Exception as exc:
+        import traceback as _tb, json as _json
+        err = {
+            "error": "TEMPLATE_RENDER_FAILED",
+            "message": str(exc),
+            "type": exc.__class__.__name__,
+            "traceback": _tb.format_exc(limit=8),
+            "paths_debug": {
+                "BASE_DIR_main": str(BASE_DIR),
+                "STATIC_DIR_exists": STATIC_DIR.exists(),
+                "TEMPLATES_DIR_exists": TEMPLATES_DIR.exists(),
+                "TEMPLATES_DIR": str(TEMPLATES_DIR),
+                "dashboard_html_path": str(TEMPLATES_DIR / "public/dashboard.html"),
+                "dashboard_html_exists": (TEMPLATES_DIR / "public/dashboard.html").exists(),
+                "list_templates_dir": list(sorted(p.name for p in TEMPLATES_DIR.rglob("*"))) if TEMPLATES_DIR.exists() else [],
+                "BASE_DIR_main_exists_mainpy": (BASE_DIR / "main.py").exists(),
+                "BASE_DIR_main_exists_appdir": (BASE_DIR / "app").is_dir(),
+                "cwd": str(Path.cwd()),
+            },
+        }
+        if STATIC_DIR.exists():
+            err["paths_debug"]["list_static_top10"] = list(sorted(p.relative_to(BASE_DIR).as_posix() for p in STATIC_DIR.rglob("*")))[:10]
+        if config.IS_VERCEL:
+            err["paths_debug"]["Vercel_env"] = {
+                "VERCEL": bool(__import__("os").getenv("VERCEL")),
+                "VERCEL_ENV": __import__("os").getenv("VERCEL_ENV"),
+                "AWS_LAMBDA_FUNCTION_NAME": __import__("os").getenv("AWS_LAMBDA_FUNCTION_NAME"),
+                "LAMBDA_TASK_ROOT": __import__("os").getenv("LAMBDA_TASK_ROOT"),
+            }
+        import sys as _sys
+        _sys.stderr.write("ROUTE / RENDER ERROR " + _json.dumps(err, ensure_ascii=False, default=str)[:5000] + "\n")
+        _sys.stderr.flush()
+        plain = _json.dumps(err, ensure_ascii=False, indent=2, default=str)
+        return HTMLResponse(
+            content="<html><head><meta charset='utf-8'><title>500 Render Error</title></head><body><h1>500 Internal Server Error (route /)</h1><pre style='white-space:pre-wrap;background:#fee;padding:16px;'>" + plain.replace("<", "&lt;") + "</pre></body></html>",
+            status_code=500,
+        )
 
 
 @app.get("/admin/{secret}", response_class=HTMLResponse)
